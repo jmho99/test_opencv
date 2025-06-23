@@ -44,8 +44,25 @@ target_include_directories(cv_random PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_compile_features(cv_random PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17)
 
+add_executable(cv_stereo src/cv_stereo.cpp)
+ament_target_dependencies(
+  cv_stereo
+  "rclcpp"
+  "std_msgs"
+  "OpenCV"
+  "cv_bridge"
+  "sensor_msgs"
+  "image_transport"
+)
+target_include_directories(cv_stereo PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_compile_features(cv_stereo PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17)
+
 install(TARGETS
   cv_callibration
+  cv_stereo
+  cv_random
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
