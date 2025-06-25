@@ -90,6 +90,8 @@ private:
       save_current_frame(frame.clone());
     } else if (key == 'c') {
       run_calibration_from_folder();
+    } else if (key == 'e') {
+      calibration_error(obj_points_, img_points_, rvecs_, tvecs_, camera_matrix_, dist_coeffs_, image_files_);
     }
   }
 
@@ -102,15 +104,13 @@ private:
 
   void run_calibration_from_folder() {
     RCLCPP_INFO(this->get_logger(), "Start callibration...");
-    std::vector<cv::String> image_files;
-    cv::glob(save_path_ + "*.png", image_files);
-    if (image_files.size() < 5) {
-      RCLCPP_WARN(this->get_logger(), "Not enough image (%lu)", image_files.size());
+    
+    cv::glob(save_path_ + "*.png", image_files_);
+    if (image_files_.size() < 5) {
+      RCLCPP_WARN(this->get_logger(), "Not enough image (%lu)", image_files_.size());
       return;
     }
     
-    std::vector<std::vector<cv::Point2f>> img_points;
-    std::vector<std::vector<cv::Point3f>> obj_points;
     cv::Size pattern_size(cols_, rows_);
     float square_size = square_size_;
     std::vector<cv::Point3f> objp;
@@ -119,8 +119,8 @@ private:
       for (int j = 0; j < pattern_size.width; ++j)
         objp.emplace_back(j * square_size, i * square_size, 0.0f);
 
-    for (size_t idx = 0; idx < image_files.size(); ++idx) {
-      const auto &file = image_files[idx];
+    for (size_t idx = 0; idx < image_files_.size(); ++idx) {
+      const auto &file = image_files_[idx];
       cv::Mat img = cv::imread(file);
       if (img.empty()) continue;
 
@@ -133,8 +133,8 @@ private:
         cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
         cv::cornerSubPix(gray, corners, cv::Size(11, 11), cv::Size(-1, -1),
                          cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, 0.001));
-        img_points.push_back(corners);
-        obj_points.push_back(objp);
+        img_points_.push_back(corners);
+        obj_points_.push_back(objp);
 
         cv::Mat vis = img.clone();
         cv::drawChessboardCorners(vis, pattern_size, corners, found);
@@ -149,23 +149,86 @@ private:
         RCLCPP_INFO(this->get_logger(), "Save calibration image: %s", save_name.c_str());
       }
 
-      if (img_points.empty()) {
+      if (img_points_.empty()) {
         RCLCPP_ERROR(this->get_logger(), "Failed callibration.");
         return;
       }
 
-      cv::Mat camera_matrix, dist_coeffs;
-      std::vector<cv::Mat> rvecs, tvecs;
-      double rms = cv::calibrateCamera(obj_points, img_points, cv::Size(frame_width_, frame_height_),
-                                     camera_matrix, dist_coeffs, rvecs, tvecs);
+      
+      
+      double rms = cv::calibrateCamera(obj_points_, img_points_, cv::Size(frame_width_, frame_height_),
+                                     camera_matrix_, dist_coeffs_, rvecs_, tvecs_);
 
       RCLCPP_INFO(this->get_logger(), "RMS error: %.4f", rms);
       cv::FileStorage fs("calibration_result.yaml", cv::FileStorage::WRITE);
-      fs << "camera_matrix" << camera_matrix;
-      fs << "distortion_coefficients" << dist_coeffs;
+      fs << "camera_matrix_" << camera_matrix_;
+      fs << "distortion_coefficients" << dist_coeffs_;
+      fs << "rotation" << rvecs_;
+      fs << "translation" << tvecs_;
       fs.release();
       RCLCPP_INFO(this->get_logger(), "Successed result saving: calibration_result.yaml");
+      
     }
+    
+  }
+
+  void calibration_error(const std::vector<std::vector<cv::Point3f>>& obj_points_,
+                        const std::vector<std::vector<cv::Point2f>>& img_points_,
+                        const std::vector<cv::Mat>& rvecs_,
+                        const std::vector<cv::Mat>& tvecs_,
+                        const cv::Mat& camera_matrix_,
+                        const cv::Mat& dist_coeffs_,
+                        std::vector<cv::String>& image_files_) {
+  
+
+cv::glob(save_path_ + "*.png", image_files_);
+  for (size_t i = 0; i < image_files_.size(); ++i) {
+    cv::Mat img = cv::imread(image_files_[i]);
+    if (img.empty()) {
+      RCLCPP_WARN(rclcpp::get_logger("calibration_error"), 
+                  "Image load failed: %s", image_files_[i].c_str());
+      continue;
+    }
+
+    std::vector<cv::Point2f> projected_points;
+    cv::projectPoints(obj_points_[i], rvecs_[i], tvecs_[i], 
+                      camera_matrix_, dist_coeffs_, projected_points);
+    
+
+    cv::Mat ideal_dist = cv::Mat::zeros(1, 5, CV_64F);
+    double i_mat[] = {1014.5, 0.0, 720.0,
+                        0.0, 1014.5, 540.0,
+                        0.0, 0.0, 1.0};
+    cv::Mat ideal_camera_matrix(3, 3, CV_64F, i_mat);      
+
+    std::vector<cv::Point2f> projected_ideal;
+    cv::projectPoints(obj_points_[i], rvecs_[i], tvecs_[i],
+                      ideal_camera_matrix, ideal_dist, projected_ideal);
+    cv::Mat vis = img.clone();
+    for (size_t j = 0; j < img_points_[i].size(); ++j) {
+      cv::Point2f actual = img_points_[i][j];
+      cv::Point2f reprojected = projected_points[j];
+      cv::Point2f& reproj_ideal = projected_ideal[j];
+
+
+      cv::circle(vis, actual, 2, cv::Scalar(0, 255, 0), -1);     // 실제 코너: 초록
+      cv::circle(vis, reprojected, 2, cv::Scalar(0, 0, 255), -1); // 재투영 코너: 빨강
+      cv::circle(vis, reproj_ideal, 4, cv::Scalar(255, 0, 0), -1); // 재투영 코너: 빨강
+      cv::line(vis, actual, reprojected, cv::Scalar(255, 0, 0), 1); // 연결선: 파랑
+
+      
+    }
+    std::string save_name = save_path_ + "img_" + std::to_string(i) + "_error_calib_result.png";
+      cv::imwrite(save_name, vis);
+
+      cv::Point3f p = obj_points_[i][3];
+      cv::Point2f c = img_points_[i][3];
+      
+      std::cout << "세 번째 코너의 월드 좌표: " << p << std::endl;
+      std::cout << "세 번째 코너의 이미지 좌표: " << c << std::endl;
+
+  }
+
   }
 
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;
@@ -180,6 +243,12 @@ private:
   float square_size_;
   int frame_width_;
   int frame_height_;
+
+  std::vector<std::vector<cv::Point2f>> img_points_;
+  std::vector<std::vector<cv::Point3f>> obj_points_;
+  std::vector<cv::Mat> rvecs_, tvecs_;
+  cv::Mat camera_matrix_, dist_coeffs_;
+  std::vector<cv::String> image_files_;
 };
 
 int main(int argc, char **argv) {
