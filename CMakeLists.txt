@@ -13,6 +13,9 @@ find_package(OpenCV REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(image_transport REQUIRED)
+find_package(PCL REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(pcl_conversions REQUIRED)
 
 add_executable(cv_callibration src/cv_callibration.cpp)
 ament_target_dependencies(
@@ -59,10 +62,30 @@ target_include_directories(cv_stereo PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_compile_features(cv_stereo PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17)
 
+add_executable(cv_cam_lidar_cali src/cv_cam_lidar_cali.cpp)
+ament_target_dependencies(
+  cv_cam_lidar_cali
+  "rclcpp"
+  "std_msgs"
+  "OpenCV"
+  "cv_bridge"
+  "sensor_msgs"
+  "image_transport"
+  "PCL"
+  "visualization_msgs"
+  "pcl_conversions"
+)
+target_include_directories(cv_cam_lidar_cali PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_compile_features(cv_cam_lidar_cali PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17)
+
+
 install(TARGETS
   cv_callibration
   cv_stereo
   cv_random
+  cv_cam_lidar_cali
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)

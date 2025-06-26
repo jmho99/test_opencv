@@ -131,7 +131,7 @@ private:
       if (found) {
         cv::Mat gray;
         cv::cvtColor(img, gray, cv::COLOR_BGR2GRAY);
-        cv::cornerSubPix(gray, corners, cv::Size(11, 11), cv::Size(-1, -1),
+        cv::cornerSubPix(gray, corners, cv::Size(5, 5), cv::Size(-1, -1),
                          cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::MAX_ITER, 30, 0.001));
         img_points_.push_back(corners);
         obj_points_.push_back(objp);
