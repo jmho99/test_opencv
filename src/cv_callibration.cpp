@@ -101,6 +101,15 @@ private:
     RCLCPP_INFO(this->get_logger(), "Save Image: %s", filename.c_str());
     frame_counter_++;
   }
+  int extract_number(const std::string& filename) {
+    std::string number;
+    for (char c : filename) {
+        if (std::isdigit(c)) {
+            number += c;
+        }
+    }
+    return number.empty() ? -1 : std::stoi(number);
+}
 
   void run_calibration_from_folder() {
     RCLCPP_INFO(this->get_logger(), "Start callibration...");
@@ -110,6 +119,11 @@ private:
       RCLCPP_WARN(this->get_logger(), "Not enough image (%lu)", image_files_.size());
       return;
     }
+    std::sort(image_files_.begin(), image_files_.end(),
+    [this](const std::string& a, const std::string& b) {
+        return extract_number(a) < extract_number(b);
+      }
+    );
     
     cv::Size pattern_size(cols_, rows_);
     float square_size = square_size_;
@@ -148,6 +162,12 @@ private:
         cv::imwrite(save_name, vis);
         RCLCPP_INFO(this->get_logger(), "Save calibration image: %s", save_name.c_str());
       }
+      else {
+        cv::Mat vis = img.clone();
+        std::string failed_save_name = save_path_ + "img_" + std::to_string(idx) + "_failed_result.png";
+        cv::imwrite(failed_save_name,vis);
+        RCLCPP_INFO(this->get_logger(), "Save failed image: %s", failed_save_name.c_str());
+      }
 
       if (img_points_.empty()) {
         RCLCPP_ERROR(this->get_logger(), "Failed callibration.");
@@ -181,12 +201,18 @@ private:
                         std::vector<cv::String>& image_files_) {
   
 
-cv::glob(save_path_ + "*.png", image_files_);
+cv::glob(save_path_ + "*_calib_result.png", image_files_);
+std::sort(image_files_.begin(), image_files_.end(),
+    [this](const std::string& a, const std::string& b) {
+        return extract_number(a) < extract_number(b);
+      }
+    );
   for (size_t i = 0; i < image_files_.size(); ++i) {
     cv::Mat img = cv::imread(image_files_[i]);
     if (img.empty()) {
       RCLCPP_WARN(rclcpp::get_logger("calibration_error"), 
                   "Image load failed: %s", image_files_[i].c_str());
+      i++;
       continue;
     }
 
@@ -221,8 +247,8 @@ cv::glob(save_path_ + "*.png", image_files_);
     std::string save_name = save_path_ + "img_" + std::to_string(i) + "_error_calib_result.png";
       cv::imwrite(save_name, vis);
 
-      cv::Point3f p = obj_points_[i][3];
-      cv::Point2f c = img_points_[i][3];
+      cv::Point3f p = obj_points_[i][69];
+      cv::Point2f c = img_points_[i][69];
       
       std::cout << "세 번째 코너의 월드 좌표: " << p << std::endl;
       std::cout << "세 번째 코너의 이미지 좌표: " << c << std::endl;
