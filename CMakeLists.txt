@@ -80,12 +80,26 @@ target_include_directories(cv_cam_lidar_cali PUBLIC
   $<INSTALL_INTERFACE:include>)
 target_compile_features(cv_cam_lidar_cali PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17)
 
+add_executable(pcd_publisher src/pcd_publisher.cpp)
+ament_target_dependencies(
+  pcd_publisher
+  "rclcpp"
+  "std_msgs"
+  "sensor_msgs"
+  "PCL"
+  "pcl_conversions"
+)
+target_include_directories(pcd_publisher PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_compile_features(pcd_publisher PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17)
 
 install(TARGETS
   cv_callibration
   cv_stereo
   cv_random
   cv_cam_lidar_cali
+  pcd_publisher
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
